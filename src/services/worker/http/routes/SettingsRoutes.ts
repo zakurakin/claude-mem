@@ -99,6 +99,19 @@ export class SettingsRoutes extends BaseRouteHandler {
       'CLAUDE_MEM_OPENROUTER_APP_NAME',
       'CLAUDE_MEM_OPENROUTER_MAX_CONTEXT_MESSAGES',
       'CLAUDE_MEM_OPENROUTER_MAX_TOKENS',
+      'CLAUDE_MEM_OPENAI_API_KEY',
+      'CLAUDE_MEM_OPENAI_MODEL',
+      'CLAUDE_MEM_OPENAI_BASE_URL',
+      'CLAUDE_MEM_OPENAI_MAX_CONTEXT_MESSAGES',
+      'CLAUDE_MEM_OPENAI_MAX_TOKENS',
+      'CLAUDE_MEM_OPENAI_MAX_OUTPUT_TOKENS',
+      'CLAUDE_MEM_OPENAI_REASONING_EFFORT',
+      'CLAUDE_MEM_CODEX_PATH',
+      'CLAUDE_MEM_CODEX_MODEL',
+      'CLAUDE_MEM_CODEX_REASONING_EFFORT',
+      'CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES',
+      'CLAUDE_MEM_CODEX_MAX_TOKENS',
+      'CLAUDE_MEM_CODEX_TIMEOUT_MS',
       'CLAUDE_MEM_DATA_DIR',
       'CLAUDE_MEM_LOG_LEVEL',
       'CLAUDE_MEM_PYTHON_VERSION',
@@ -189,9 +202,9 @@ export class SettingsRoutes extends BaseRouteHandler {
 
   private validateSettings(settings: any): { valid: boolean; error?: string } {
     if (settings.CLAUDE_MEM_PROVIDER) {
-    const validProviders = ['claude', 'gemini', 'openrouter'];
+    const validProviders = ['claude', 'gemini', 'openrouter', 'openai', 'codex'];
     if (!validProviders.includes(settings.CLAUDE_MEM_PROVIDER)) {
-      return { valid: false, error: 'CLAUDE_MEM_PROVIDER must be "claude", "gemini", or "openrouter"' };
+      return { valid: false, error: 'CLAUDE_MEM_PROVIDER must be "claude", "gemini", "openrouter", "openai", or "codex"' };
       }
     }
 
@@ -307,6 +320,79 @@ export class SettingsRoutes extends BaseRouteHandler {
       } catch (error) {
         logger.debug('SETTINGS', 'Invalid URL format', { url: settings.CLAUDE_MEM_OPENROUTER_SITE_URL, error: error instanceof Error ? error.message : String(error) });
         return { valid: false, error: 'CLAUDE_MEM_OPENROUTER_SITE_URL must be a valid URL' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_OPENAI_BASE_URL) {
+      try {
+        new URL(settings.CLAUDE_MEM_OPENAI_BASE_URL);
+      } catch (error) {
+        logger.debug('SETTINGS', 'Invalid OpenAI base URL format', { url: settings.CLAUDE_MEM_OPENAI_BASE_URL, error: error instanceof Error ? error.message : String(error) });
+        return { valid: false, error: 'CLAUDE_MEM_OPENAI_BASE_URL must be a valid URL' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_OPENAI_MAX_CONTEXT_MESSAGES) {
+      const count = parseInt(settings.CLAUDE_MEM_OPENAI_MAX_CONTEXT_MESSAGES, 10);
+      if (isNaN(count) || count < 1 || count > 100) {
+        return { valid: false, error: 'CLAUDE_MEM_OPENAI_MAX_CONTEXT_MESSAGES must be between 1 and 100' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_OPENAI_MAX_TOKENS) {
+      const tokens = parseInt(settings.CLAUDE_MEM_OPENAI_MAX_TOKENS, 10);
+      if (isNaN(tokens) || tokens < 1000 || tokens > 1000000) {
+        return { valid: false, error: 'CLAUDE_MEM_OPENAI_MAX_TOKENS must be between 1000 and 1000000' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_OPENAI_MAX_OUTPUT_TOKENS) {
+      const tokens = parseInt(settings.CLAUDE_MEM_OPENAI_MAX_OUTPUT_TOKENS, 10);
+      if (isNaN(tokens) || tokens < 1 || tokens > 128000) {
+        return { valid: false, error: 'CLAUDE_MEM_OPENAI_MAX_OUTPUT_TOKENS must be between 1 and 128000' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_OPENAI_REASONING_EFFORT) {
+      const validEfforts = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+      if (!validEfforts.includes(settings.CLAUDE_MEM_OPENAI_REASONING_EFFORT)) {
+        return { valid: false, error: 'CLAUDE_MEM_OPENAI_REASONING_EFFORT must be one of: none, minimal, low, medium, high, xhigh' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_CODEX_PATH !== undefined && String(settings.CLAUDE_MEM_CODEX_PATH).trim().length === 0) {
+      return { valid: false, error: 'CLAUDE_MEM_CODEX_PATH must not be empty' };
+    }
+
+    if (settings.CLAUDE_MEM_CODEX_MODEL !== undefined && String(settings.CLAUDE_MEM_CODEX_MODEL).trim().length === 0) {
+      return { valid: false, error: 'CLAUDE_MEM_CODEX_MODEL must not be empty' };
+    }
+
+    if (settings.CLAUDE_MEM_CODEX_REASONING_EFFORT) {
+      const validEfforts = ['low', 'medium', 'high', 'xhigh'];
+      if (!validEfforts.includes(settings.CLAUDE_MEM_CODEX_REASONING_EFFORT)) {
+        return { valid: false, error: 'CLAUDE_MEM_CODEX_REASONING_EFFORT must be one of: low, medium, high, xhigh' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES) {
+      const count = parseInt(settings.CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES, 10);
+      if (isNaN(count) || count < 1 || count > 100) {
+        return { valid: false, error: 'CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES must be between 1 and 100' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_CODEX_MAX_TOKENS) {
+      const tokens = parseInt(settings.CLAUDE_MEM_CODEX_MAX_TOKENS, 10);
+      if (isNaN(tokens) || tokens < 1000 || tokens > 1000000) {
+        return { valid: false, error: 'CLAUDE_MEM_CODEX_MAX_TOKENS must be between 1000 and 1000000' };
+      }
+    }
+
+    if (settings.CLAUDE_MEM_CODEX_TIMEOUT_MS) {
+      const timeout = parseInt(settings.CLAUDE_MEM_CODEX_TIMEOUT_MS, 10);
+      if (isNaN(timeout) || timeout < 10000 || timeout > 600000) {
+        return { valid: false, error: 'CLAUDE_MEM_CODEX_TIMEOUT_MS must be between 10000 and 600000' };
       }
     }
 

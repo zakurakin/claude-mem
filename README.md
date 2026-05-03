@@ -144,6 +144,12 @@ Or install for OpenCode:
 npx claude-mem install --ide opencode
 ```
 
+Or install for Codex CLI / Codex Desktop transcript watching:
+
+```bash
+npx claude-mem install --ide codex-cli --provider codex
+```
+
 Or install from the plugin marketplace inside Claude Code:
 
 ```bash
@@ -188,6 +194,7 @@ The installer handles dependencies, plugin setup, AI provider configuration, wor
 ### Getting Started
 
 - **[Installation Guide](https://docs.claude-mem.ai/installation)** - Quick start & advanced installation
+- **[Windows 11 + Codex Setup](https://docs.claude-mem.ai/windows-codex-setup)** - Codex Desktop, Codex CLI provider, autorun, and Windows port recovery
 - **[Gemini CLI Setup](https://docs.claude-mem.ai/gemini-cli/setup)** - Dedicated guide for Google's Gemini CLI integration
 - **[Usage Guide](https://docs.claude-mem.ai/usage/getting-started)** - How Claude-Mem works automatically
 - **[Search Tools](https://docs.claude-mem.ai/usage/search-tools)** - Query your project history with natural language
@@ -288,6 +295,26 @@ See **[Beta Features Documentation](https://docs.claude-mem.ai/beta-features)** 
 
 ---
 ### Windows Setup Notes
+
+For Codex Desktop on Windows 11, see the full **[Windows 11 + Codex Setup](https://docs.claude-mem.ai/windows-codex-setup)**. It covers Codex transcript watching, MCP registration, Chroma/uvx setup, Windows autorun, and stale port recovery.
+
+If you want Claude-Mem memory compression to use your Codex/ChatGPT plan instead of OpenAI API billing, install with:
+
+```powershell
+npx claude-mem install --ide codex-cli --provider codex
+```
+
+Then set these keys in `%USERPROFILE%\.claude-mem\settings.json` if the installer did not set them already:
+
+```json
+{
+  "CLAUDE_MEM_PROVIDER": "codex",
+  "CLAUDE_MEM_CODEX_MODEL": "gpt-5.3-codex-spark",
+  "CLAUDE_MEM_CODEX_REASONING_EFFORT": "low"
+}
+```
+
+The separate `openai` provider uses an OpenAI API key and API billing. The `codex` provider shells out to the local `codex` CLI and uses your logged-in Codex account.
 
 If you see an error like:
 

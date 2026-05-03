@@ -1,0 +1,79 @@
+---
+title: "OpenAI Provider"
+description: "Use OpenAI models, including Codex models, for Claude-Mem observation compression"
+---
+
+# OpenAI Provider
+
+Claude-Mem can use OpenAI's Responses API as its compression provider. This is useful when you want Claude-Mem's memory extraction traffic to use a dedicated OpenAI API project.
+
+<Note>
+OpenAI API usage is separate from ChatGPT/Codex plan usage. If you want Claude-Mem to use a local Codex CLI login and a Codex plan model such as `gpt-5.3-codex-spark`, use the [Codex CLI Provider](codex-provider) instead.
+</Note>
+
+## Configure Credentials
+
+Store credentials outside the shared settings file:
+
+```bash
+mkdir -p ~/.claude-mem
+printf "OPENAI_API_KEY=<your-openai-api-key>\n" > ~/.claude-mem/.env
+chmod 600 ~/.claude-mem/.env
+```
+
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Path "$env:USERPROFILE\.claude-mem" -Force | Out-Null
+Set-Content -Path "$env:USERPROFILE\.claude-mem\.env" -Value "OPENAI_API_KEY=<your-openai-api-key>"
+```
+
+Do not commit `.env`; it is ignored by git.
+
+## Select the Provider
+
+Edit `~/.claude-mem/settings.json`:
+
+```json
+{
+  "CLAUDE_MEM_PROVIDER": "openai",
+  "CLAUDE_MEM_OPENAI_MODEL": "gpt-5.2-codex",
+  "CLAUDE_MEM_OPENAI_BASE_URL": "https://api.openai.com/v1",
+  "CLAUDE_MEM_OPENAI_REASONING_EFFORT": "low"
+}
+```
+
+You can use any OpenAI model ID that is available to your API project:
+
+```json
+{
+  "CLAUDE_MEM_OPENAI_MODEL": "gpt-5.3-codex"
+}
+```
+
+Keep `CLAUDE_MEM_OPENAI_REASONING_EFFORT` at `low` for routine memory compression, or raise it only if you want higher quality observations and accept more reasoning tokens.
+
+## Restart and Verify
+
+Restart the worker:
+
+```bash
+bun ~/.claude/plugins/cache/thedotmack/claude-mem/12.5.0/scripts/worker-service.cjs restart
+```
+
+Then check the health endpoint:
+
+```bash
+curl http://127.0.0.1:37777/api/health
+```
+
+The `ai` section should show:
+
+```json
+{
+  "provider": "openai",
+  "authMethod": "OpenAI API key"
+}
+```
+
+If no API key is configured, leave `CLAUDE_MEM_PROVIDER` set to `claude`, `gemini`, `openrouter`, or `codex` until credentials are ready.
