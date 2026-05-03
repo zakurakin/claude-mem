@@ -1,40 +1,43 @@
-
 import path from 'path';
 import net from 'net';
 import { readFileSync } from 'fs';
 import { logger } from '../../utils/logger.js';
 import { MARKETPLACE_ROOT } from '../../shared/paths.js';
 
+const DEFAULT_WORKER_REQUEST_TIMEOUT_MS = 4500;
+
 async function httpRequestToWorker(
   port: number,
   endpointPath: string,
-  method: string = 'GET'
+  method: string = 'GET',
+  timeoutMs: number = DEFAULT_WORKER_REQUEST_TIMEOUT_MS
 ): Promise<{ ok: boolean; statusCode: number; body: string }> {
-  const response = await fetch(`http://127.0.0.1:${port}${endpointPath}`, { method });
-  let body = '';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    body = await response.text();
-  } catch {
-    // Body unavailable — health/readiness checks only need .ok
+    const response = await fetch(`http://127.0.0.1:${port}${endpointPath}`, {
+      method,
+      signal: controller.signal
+    });
+    let body = '';
+    try {
+      body = await response.text();
+    } catch {
+      // Body unavailable - health/readiness checks only need .ok.
+    }
+    return { ok: response.ok, statusCode: response.status, body };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return { ok: response.ok, statusCode: response.status, body };
 }
 
 export async function isPortInUse(port: number): Promise<boolean> {
-  if (process.platform === 'win32') {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/health`);
-      return response.ok;
-    } catch (error) {
-      if (error instanceof Error) {
-        logger.debug('SYSTEM', 'Windows health check failed (port not in use)', {}, error);
-      } else {
-        logger.debug('SYSTEM', 'Windows health check failed (port not in use)', { error: String(error) });
-      }
-      return false;
-    }
-  }
-
   return new Promise((resolve) => {
     const server = net.createServer();
     server.once('error', (err: NodeJS.ErrnoException) => {
@@ -60,7 +63,10 @@ async function pollEndpointUntilOk(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      const result = await httpRequestToWorker(port, endpointPath);
+      const elapsedMs = Date.now() - start;
+      const remainingMs = Math.max(1, timeoutMs - elapsedMs);
+      const requestTimeoutMs = Math.min(DEFAULT_WORKER_REQUEST_TIMEOUT_MS, remainingMs);
+      const result = await httpRequestToWorker(port, endpointPath, 'GET', requestTimeoutMs);
       if (result.ok) return true;
     } catch (error) {
       if (error instanceof Error) {

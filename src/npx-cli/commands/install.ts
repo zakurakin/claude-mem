@@ -405,7 +405,7 @@ async function installClaudeCode(): Promise<boolean> {
     child.stderr?.on('data', (chunk: Buffer) => { captured += chunk.toString(); });
 
     child.on('error', (error: Error) => {
-      spinner?.stop('Claude Code install failed', 1);
+      spinner?.stop('Claude Code install failed');
       if (captured) process.stderr.write(captured);
       log.error(`Claude Code install failed: ${error.message}`);
       log.info('You can install it manually later: https://claude.ai/install.sh');
@@ -414,7 +414,7 @@ async function installClaudeCode(): Promise<boolean> {
 
     child.on('exit', (code) => {
       if (code !== 0) {
-        spinner?.stop('Claude Code install failed', 1);
+        spinner?.stop('Claude Code install failed');
         if (captured) process.stderr.write(captured);
         log.error(`Claude Code install failed (exit ${code ?? 'unknown'})`);
         log.info('You can install it manually later: https://claude.ai/install.sh');
@@ -582,7 +582,7 @@ function mergeSettings(updates: Record<string, string>): boolean {
   }
 }
 
-type ProviderId = 'claude' | 'gemini' | 'openrouter';
+type ProviderId = 'claude' | 'gemini' | 'openrouter' | 'openai' | 'codex';
 
 async function promptProvider(options: InstallOptions): Promise<ProviderId> {
   const initialProvider = (getSetting('CLAUDE_MEM_PROVIDER') as ProviderId) || 'claude';
@@ -597,6 +597,12 @@ async function promptProvider(options: InstallOptions): Promise<ProviderId> {
       if (options.provider === 'claude') {
         persistClaudeProvider();
         return 'claude';
+      }
+      if (options.provider === 'codex') {
+        const wrote = mergeSettings({ CLAUDE_MEM_PROVIDER: 'codex' });
+        if (wrote) log.info('Saved provider=codex to ~/.claude-mem/settings.json');
+        log.warn('Provider=codex requested non-interactively. Make sure the Codex CLI is installed and logged in.');
+        return 'codex';
       }
       const wrote = mergeSettings({ CLAUDE_MEM_PROVIDER: options.provider });
       if (wrote) log.info(`Saved provider=${options.provider} to ~/.claude-mem/settings.json`);
@@ -616,6 +622,8 @@ async function promptProvider(options: InstallOptions): Promise<ProviderId> {
         { value: 'claude', label: 'Claude Code auth (default — no extra setup, uses your existing Claude Code subscription)' },
         { value: 'gemini', label: 'Gemini API key (free tier available — fast and cheap)' },
         { value: 'openrouter', label: 'OpenRouter API key (BYO model — wide selection of frontier and open models)' },
+        { value: 'openai', label: 'OpenAI API key (GPT-5.2-Codex via Responses API)' },
+        { value: 'codex', label: 'Codex CLI auth (uses your logged-in Codex/ChatGPT plan)' },
       ],
       initialValue: initialProvider,
     });
@@ -632,10 +640,21 @@ async function promptProvider(options: InstallOptions): Promise<ProviderId> {
     return 'claude';
   }
 
-  const providerLabel = selectedProvider === 'gemini' ? 'Gemini' : 'OpenRouter';
-  const keyEnvName = selectedProvider === 'gemini'
-    ? 'CLAUDE_MEM_GEMINI_API_KEY'
-    : 'CLAUDE_MEM_OPENROUTER_API_KEY';
+  if (selectedProvider === 'codex') {
+    const wrote = mergeSettings({ CLAUDE_MEM_PROVIDER: 'codex' });
+    if (wrote) log.info('Saved provider=codex to ~/.claude-mem/settings.json');
+    log.info('Codex provider uses your local Codex CLI login; no API key is required.');
+    return 'codex';
+  }
+
+  const providerLabel =
+    selectedProvider === 'gemini' ? 'Gemini' :
+    selectedProvider === 'openai' ? 'OpenAI' :
+    'OpenRouter';
+  const keyEnvName =
+    selectedProvider === 'gemini' ? 'CLAUDE_MEM_GEMINI_API_KEY' :
+    selectedProvider === 'openai' ? 'CLAUDE_MEM_OPENAI_API_KEY' :
+    'CLAUDE_MEM_OPENROUTER_API_KEY';
 
   const existingKey = getSetting(keyEnvName as keyof SettingsDefaults) as string | undefined;
   if (existingKey && existingKey.trim().length > 0) {
@@ -647,7 +666,7 @@ async function promptProvider(options: InstallOptions): Promise<ProviderId> {
   const apiKeyResult = await p.password({
     message: `Paste your ${providerLabel} API key:`,
     mask: '*',
-    validate: (v: string) => (!v || v.trim().length === 0) ? 'API key required' : undefined,
+    validate: (v: string | undefined) => (!v || v.trim().length === 0) ? 'API key required' : undefined,
   });
 
   if (p.isCancel(apiKeyResult)) {
@@ -716,7 +735,7 @@ async function promptClaudeModel(options: InstallOptions): Promise<void> {
 
 export interface InstallOptions {
   ide?: string;
-  provider?: 'claude' | 'gemini' | 'openrouter';
+  provider?: 'claude' | 'gemini' | 'openrouter' | 'openai' | 'codex';
   model?: string;
   noAutoStart?: boolean;
 }
@@ -819,7 +838,7 @@ export async function runInstallCommand(options: InstallOptions = {}): Promise<v
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         if (shutdownSpinner) {
-          shutdownSpinner.stop(`Pre-overwrite worker shutdown failed: ${message}`, 1);
+          shutdownSpinner.stop(`Pre-overwrite worker shutdown failed: ${message}`);
         } else {
           console.warn('[install] Pre-overwrite worker shutdown failed:', message);
         }

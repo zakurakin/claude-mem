@@ -331,7 +331,7 @@ export function ContextSettingsModal({
             >
               <FormField
                 label="AI Provider"
-                tooltip="Choose between Claude (via Agent SDK) or Gemini (via REST API)"
+                tooltip="Choose the model provider used for memory compression"
               >
                 <select
                   value={formState.CLAUDE_MEM_PROVIDER || 'claude'}
@@ -340,6 +340,8 @@ export function ContextSettingsModal({
                   <option value="claude">Claude (uses your Claude account)</option>
                   <option value="gemini">Gemini (uses API key)</option>
                   <option value="openrouter">OpenRouter (multi-model)</option>
+                  <option value="openai">OpenAI Codex (uses API key)</option>
+                  <option value="codex">Codex CLI (uses your Codex login)</option>
                 </select>
               </FormField>
 
@@ -441,6 +443,114 @@ export function ContextSettingsModal({
                       value={formState.CLAUDE_MEM_OPENROUTER_APP_NAME || 'claude-mem'}
                       onChange={(e) => updateSetting('CLAUDE_MEM_OPENROUTER_APP_NAME', e.target.value)}
                       placeholder="claude-mem"
+                    />
+                  </FormField>
+                </>
+              )}
+
+              {formState.CLAUDE_MEM_PROVIDER === 'openai' && (
+                <>
+                  <FormField
+                    label="OpenAI API Key"
+                    tooltip="Your OpenAI API key (or set OPENAI_API_KEY in ~/.claude-mem/.env)"
+                  >
+                    <input
+                      type="password"
+                      value={formState.CLAUDE_MEM_OPENAI_API_KEY || ''}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_OPENAI_API_KEY', e.target.value)}
+                      placeholder="Enter OpenAI API key..."
+                    />
+                  </FormField>
+                  <FormField
+                    label="OpenAI Model"
+                    tooltip="Model used through the OpenAI Responses API"
+                  >
+                    <input
+                      type="text"
+                      value={formState.CLAUDE_MEM_OPENAI_MODEL || 'gpt-5.2-codex'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_OPENAI_MODEL', e.target.value)}
+                      placeholder="gpt-5.2-codex"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Reasoning Effort"
+                    tooltip="Reasoning budget for GPT-5.2-Codex"
+                  >
+                    <select
+                      value={formState.CLAUDE_MEM_OPENAI_REASONING_EFFORT || 'low'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_OPENAI_REASONING_EFFORT', e.target.value)}
+                    >
+                      <option value="none">none</option>
+                      <option value="minimal">minimal</option>
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                      <option value="xhigh">xhigh</option>
+                    </select>
+                  </FormField>
+                  <FormField
+                    label="Base URL"
+                    tooltip="OpenAI-compatible Responses API base URL"
+                  >
+                    <input
+                      type="text"
+                      value={formState.CLAUDE_MEM_OPENAI_BASE_URL || 'https://api.openai.com/v1'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_OPENAI_BASE_URL', e.target.value)}
+                      placeholder="https://api.openai.com/v1"
+                    />
+                  </FormField>
+                </>
+              )}
+
+              {formState.CLAUDE_MEM_PROVIDER === 'codex' && (
+                <>
+                  <FormField
+                    label="Codex Model"
+                    tooltip="Model passed to codex exec"
+                  >
+                    <input
+                      type="text"
+                      value={formState.CLAUDE_MEM_CODEX_MODEL || 'gpt-5.3-codex-spark'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_CODEX_MODEL', e.target.value)}
+                      placeholder="gpt-5.3-codex-spark"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Reasoning Effort"
+                    tooltip="Reasoning budget passed to codex exec"
+                  >
+                    <select
+                      value={formState.CLAUDE_MEM_CODEX_REASONING_EFFORT || 'low'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_CODEX_REASONING_EFFORT', e.target.value)}
+                    >
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                      <option value="xhigh">xhigh</option>
+                    </select>
+                  </FormField>
+                  <FormField
+                    label="Codex CLI Path"
+                    tooltip="Command or full path for the Codex CLI executable"
+                  >
+                    <input
+                      type="text"
+                      value={formState.CLAUDE_MEM_CODEX_PATH || 'codex'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_CODEX_PATH', e.target.value)}
+                      placeholder="codex"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Codex Timeout"
+                    tooltip="Maximum milliseconds for each codex exec compression call"
+                  >
+                    <input
+                      type="number"
+                      min="10000"
+                      max="600000"
+                      step="10000"
+                      value={formState.CLAUDE_MEM_CODEX_TIMEOUT_MS || '180000'}
+                      onChange={(e) => updateSetting('CLAUDE_MEM_CODEX_TIMEOUT_MS', e.target.value)}
                     />
                   </FormField>
                 </>

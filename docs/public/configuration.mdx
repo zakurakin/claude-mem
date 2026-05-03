@@ -14,7 +14,7 @@ Settings are managed in `~/.claude-mem/settings.json`. The file is auto-created 
 | Setting                       | Default                         | Description                           |
 |-------------------------------|---------------------------------|---------------------------------------|
 | `CLAUDE_MEM_MODEL`            | `claude-haiku-4-5-20251001`     | Claude model used to compress observations (when using the Claude provider) |
-| `CLAUDE_MEM_PROVIDER`         | `claude`                        | AI provider: `claude`, `gemini`, or `openrouter` |
+| `CLAUDE_MEM_PROVIDER`         | `claude`                        | AI provider: `claude`, `gemini`, `openrouter`, `openai`, or `codex` |
 | `CLAUDE_MEM_MODE`             | `code`                          | Active mode profile (e.g., `code--es`, `email-investigation`) |
 | `CLAUDE_MEM_CONTEXT_OBSERVATIONS` | `50`                        | Number of observations to inject      |
 | `CLAUDE_MEM_WORKER_PORT`      | `37700 + (uid % 100)`           | Worker service port (per-user default; override for fixed port) |
@@ -43,6 +43,33 @@ See [Gemini Provider](usage/gemini-provider) for detailed configuration and free
 | `CLAUDE_MEM_OPENROUTER_APP_NAME`             | `claude-mem`                | Optional: App name for analytics      |
 
 See [OpenRouter Provider](usage/openrouter-provider) for detailed configuration, free model list, and usage guide.
+
+### OpenAI Provider Settings
+
+| Setting                                      | Default                     | Description                           |
+|----------------------------------------------|-----------------------------|---------------------------------------|
+| `CLAUDE_MEM_OPENAI_API_KEY`                  | —                           | OpenAI API key. Prefer `OPENAI_API_KEY` in `~/.claude-mem/.env` for local credentials |
+| `CLAUDE_MEM_OPENAI_MODEL`                    | `gpt-5.2-codex`             | OpenAI model used through the Responses API |
+| `CLAUDE_MEM_OPENAI_BASE_URL`                 | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
+| `CLAUDE_MEM_OPENAI_MAX_CONTEXT_MESSAGES`     | `20`                        | Max messages in conversation history  |
+| `CLAUDE_MEM_OPENAI_MAX_TOKENS`               | `100000`                    | Token budget safety limit             |
+| `CLAUDE_MEM_OPENAI_MAX_OUTPUT_TOKENS`        | `4096`                      | Max output tokens per compression call |
+| `CLAUDE_MEM_OPENAI_REASONING_EFFORT`         | `low`                       | Optional reasoning effort: `none`, `minimal`, `low`, `medium`, `high`, or `xhigh` |
+
+See [OpenAI Provider](usage/openai-provider) for setup instructions.
+
+### Codex CLI Provider Settings
+
+| Setting                                      | Default                     | Description                           |
+|----------------------------------------------|-----------------------------|---------------------------------------|
+| `CLAUDE_MEM_CODEX_PATH`                      | `codex`                     | Codex CLI command or absolute executable path |
+| `CLAUDE_MEM_CODEX_MODEL`                     | `gpt-5.3-codex-spark`       | Model passed to `codex exec` |
+| `CLAUDE_MEM_CODEX_REASONING_EFFORT`          | `low`                       | Reasoning effort passed through `model_reasoning_effort`: `low`, `medium`, `high`, or `xhigh` |
+| `CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES`      | `20`                        | Max messages in conversation history  |
+| `CLAUDE_MEM_CODEX_MAX_TOKENS`                | `100000`                    | Estimated token budget safety limit   |
+| `CLAUDE_MEM_CODEX_TIMEOUT_MS`                | `180000`                    | Timeout for each Codex CLI compression call |
+
+See [Codex CLI Provider](usage/codex-provider) for setup instructions. This provider uses your local Codex CLI login, not an OpenAI API key.
 
 ### System Configuration
 

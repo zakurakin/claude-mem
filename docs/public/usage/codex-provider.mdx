@@ -1,0 +1,99 @@
+---
+title: "Codex CLI Provider"
+description: "Use a logged-in Codex CLI account for Claude-Mem observation compression"
+---
+
+# Codex CLI Provider
+
+Claude-Mem can use the local `codex` CLI as its compression provider. This is different from the OpenAI API provider:
+
+- `CLAUDE_MEM_PROVIDER=openai` uses an OpenAI API key and API billing.
+- `CLAUDE_MEM_PROVIDER=codex` shells out to `codex exec` and uses the Codex CLI login on this machine.
+
+Use this provider when you want Claude-Mem compression traffic to use a Codex/ChatGPT plan model such as `gpt-5.3-codex-spark`, without adding an OpenAI API key.
+
+<Warning>
+The Codex provider is experimental. It depends on the installed Codex CLI contract and your local Codex authentication, so pin and test it before relying on it for unattended production workflows.
+</Warning>
+
+## Prerequisites
+
+Install and authenticate the Codex CLI:
+
+```bash
+codex --version
+codex login
+```
+
+Verify that the target model works from the same shell:
+
+```bash
+codex exec --ephemeral --skip-git-repo-check --ignore-rules --sandbox read-only --model gpt-5.3-codex-spark "Reply with exactly: ok"
+```
+
+## Select the Provider
+
+Edit `~/.claude-mem/settings.json`:
+
+```json
+{
+  "CLAUDE_MEM_PROVIDER": "codex",
+  "CLAUDE_MEM_CODEX_PATH": "codex",
+  "CLAUDE_MEM_CODEX_MODEL": "gpt-5.3-codex-spark",
+  "CLAUDE_MEM_CODEX_REASONING_EFFORT": "low",
+  "CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES": "20",
+  "CLAUDE_MEM_CODEX_MAX_TOKENS": "100000",
+  "CLAUDE_MEM_CODEX_TIMEOUT_MS": "180000"
+}
+```
+
+On Windows, `CLAUDE_MEM_CODEX_PATH` can be an absolute path to `codex.exe` or `codex.cmd` if the worker cannot find `codex` from PATH.
+
+## Restart and Verify
+
+Restart the worker:
+
+```bash
+bun ~/.claude/plugins/cache/thedotmack/claude-mem/12.5.0/scripts/worker-service.cjs restart
+```
+
+Then check the health endpoint:
+
+```bash
+curl http://127.0.0.1:37777/api/health
+```
+
+The `ai` section should show:
+
+```json
+{
+  "provider": "codex",
+  "authMethod": "Codex CLI / ChatGPT plan"
+}
+```
+
+## How It Runs
+
+For each compression turn, Claude-Mem starts an ephemeral Codex CLI run with:
+
+```bash
+codex exec --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox read-only --model <model> -c model_reasoning_effort="<effort>"
+```
+
+Claude-Mem passes the compression conversation over stdin and reads Codex's final message from a temporary output file. The provider does not store an API key and does not call the OpenAI Responses API.
+
+`gpt-5.3-codex-spark` supports `low`, `medium`, `high`, and `xhigh` reasoning effort. `low` is the default for Claude-Mem because memory compression should be cheap and frequent.
+
+## Troubleshooting
+
+If the worker reports that Codex CLI is missing, set an absolute path:
+
+```json
+{
+  "CLAUDE_MEM_CODEX_PATH": "C:\\Users\\<USER>\\AppData\\Local\\OpenAI\\Codex\\bin\\codex.exe"
+}
+```
+
+If Codex asks for login, run `codex login` in a normal terminal, then restart the worker.
+
+If you want API billing instead of Codex CLI plan usage, use `CLAUDE_MEM_PROVIDER=openai` and configure the OpenAI provider.

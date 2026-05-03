@@ -10,6 +10,8 @@ import { DatabaseManager } from '../../DatabaseManager.js';
 import { ClaudeProvider } from '../../ClaudeProvider.js';
 import { GeminiProvider, isGeminiSelected, isGeminiAvailable } from '../../GeminiProvider.js';
 import { OpenRouterProvider, isOpenRouterSelected, isOpenRouterAvailable } from '../../OpenRouterProvider.js';
+import { OpenAIProvider, isOpenAISelected, isOpenAIAvailable } from '../../OpenAIProvider.js';
+import { CodexProvider, isCodexSelected, isCodexAvailable } from '../../CodexProvider.js';
 import type { WorkerService } from '../../../worker-service.js';
 import { BaseRouteHandler } from '../BaseRouteHandler.js';
 import { SessionEventBroadcaster } from '../../events/SessionEventBroadcaster.js';
@@ -30,6 +32,8 @@ export class SessionRoutes extends BaseRouteHandler {
     private sdkAgent: ClaudeProvider,
     private geminiAgent: GeminiProvider,
     private openRouterAgent: OpenRouterProvider,
+    private openAiAgent: OpenAIProvider,
+    private codexAgent: CodexProvider,
     private eventBroadcaster: SessionEventBroadcaster,
     private workerService: WorkerService,
     private completionHandler: SessionCompletionHandler,
@@ -37,7 +41,23 @@ export class SessionRoutes extends BaseRouteHandler {
     super();
   }
 
-  private getActiveAgent(): ClaudeProvider | GeminiProvider | OpenRouterProvider {
+  private getActiveAgent(): ClaudeProvider | GeminiProvider | OpenRouterProvider | OpenAIProvider | CodexProvider {
+    if (isCodexSelected()) {
+      if (isCodexAvailable()) {
+        logger.debug('SESSION', 'Using Codex agent');
+        return this.codexAgent;
+      } else {
+        throw new Error('Codex provider selected but Codex CLI was not found. Set CLAUDE_MEM_CODEX_PATH or install/login to the Codex CLI.');
+      }
+    }
+    if (isOpenAISelected()) {
+      if (isOpenAIAvailable()) {
+        logger.debug('SESSION', 'Using OpenAI agent');
+        return this.openAiAgent;
+      } else {
+        throw new Error('OpenAI provider selected but no API key configured. Set CLAUDE_MEM_OPENAI_API_KEY in settings or OPENAI_API_KEY in ~/.claude-mem/.env.');
+      }
+    }
     if (isOpenRouterSelected()) {
       if (isOpenRouterAvailable()) {
         logger.debug('SESSION', 'Using OpenRouter agent');
@@ -57,11 +77,17 @@ export class SessionRoutes extends BaseRouteHandler {
     return this.sdkAgent;
   }
 
-  private getSelectedProvider(): 'claude' | 'gemini' | 'openrouter' {
-    if (isOpenRouterSelected() && isOpenRouterAvailable()) {
+  private getSelectedProvider(): 'claude' | 'gemini' | 'openrouter' | 'openai' | 'codex' {
+    if (isCodexSelected()) {
+      return 'codex';
+    }
+    if (isOpenAISelected()) {
+      return 'openai';
+    }
+    if (isOpenRouterSelected()) {
       return 'openrouter';
     }
-    return (isGeminiSelected() && isGeminiAvailable()) ? 'gemini' : 'claude';
+    return isGeminiSelected() ? 'gemini' : 'claude';
   }
 
   public ensureGeneratorRunning(sessionDbId: number, source: string): void {
@@ -90,7 +116,7 @@ export class SessionRoutes extends BaseRouteHandler {
 
   private startGeneratorWithProvider(
     session: ReturnType<typeof this.sessionManager.getSession>,
-    provider: 'claude' | 'gemini' | 'openrouter',
+    provider: 'claude' | 'gemini' | 'openrouter' | 'openai' | 'codex',
     source: string
   ): void {
     if (!session) return;
@@ -102,8 +128,18 @@ export class SessionRoutes extends BaseRouteHandler {
       session.abortController = new AbortController();
     }
 
-    const agent = provider === 'openrouter' ? this.openRouterAgent : (provider === 'gemini' ? this.geminiAgent : this.sdkAgent);
-    const agentName = provider === 'openrouter' ? 'OpenRouter' : (provider === 'gemini' ? 'Gemini' : 'Claude SDK');
+    const agent =
+      provider === 'codex' ? this.codexAgent :
+      provider === 'openai' ? this.openAiAgent :
+      provider === 'openrouter' ? this.openRouterAgent :
+      provider === 'gemini' ? this.geminiAgent :
+      this.sdkAgent;
+    const agentName =
+      provider === 'codex' ? 'Codex CLI' :
+      provider === 'openai' ? 'OpenAI' :
+      provider === 'openrouter' ? 'OpenRouter' :
+      provider === 'gemini' ? 'Gemini' :
+      'Claude SDK';
 
     const pendingStore = this.sessionManager.getPendingMessageStore();
     const actualQueueDepth = pendingStore.getPendingCount(session.sessionDbId);

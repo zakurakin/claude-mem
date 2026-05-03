@@ -23,7 +23,7 @@ export interface ActiveSession {
   cumulativeOutputTokens: number;  
   earliestPendingTimestamp: number | null;  
   conversationHistory: ConversationMessage[];  
-  currentProvider: 'claude' | 'gemini' | 'openrouter' | null;  
+  currentProvider: 'claude' | 'gemini' | 'openrouter' | 'openai' | 'codex' | null;
   consecutiveRestarts: number;  
   restartGuard?: RestartGuard;
   forceInit?: boolean;  

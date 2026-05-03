@@ -38,6 +38,8 @@
           "usage/getting-started",
           "usage/openrouter-provider",
           "usage/gemini-provider",
+          "usage/openai-provider",
+          "usage/codex-provider",
           "usage/search-tools",
           "usage/knowledge-agents",
           "usage/claude-desktop",
@@ -81,6 +83,7 @@
         "pages": [
           "configuration",
           "modes",
+          "windows-codex-setup",
           "development",
           "troubleshooting",
           "platform-integration",

@@ -1,0 +1,831 @@
+---
+title: "Windows Codex Setup"
+description: "Run Claude-Mem with Codex Desktop on Windows 11"
+---
+
+# claude-mem for Codex Desktop on Windows 11
+
+This runbook documents a working setup for running `thedotmack/claude-mem` with the Codex Desktop app on Windows 11.
+
+The goal is:
+
+- Watch Codex Desktop session transcripts from `~/.codex/sessions/**/*.jsonl`.
+- Extract durable memories with Claude Code CLI by default, Codex CLI plan auth if configured, or OpenAI models through the Responses API.
+- Expose memory/search through a local `claude-mem` worker.
+- Register the `claude-mem` MCP server with Codex.
+- Keep Chroma semantic search working on Windows.
+
+## Tested Setup
+
+- Windows 11
+- Codex Desktop
+- Codex CLI `0.128.0-alpha.1`
+- `claude-mem` `12.5.0`
+- Claude Code CLI `2.1.126`
+- Bun `1.3.13`
+- uv / uvx `0.11.8`
+- Node.js `22.22.2`
+- Python `3.13`
+- Visual Studio Build Tools 2022 with C++ workload
+
+Paths below use `C:\Users\<USER>` placeholders. Replace `<USER>` with the actual Windows user.
+
+## Important Notes
+
+- Claude Desktop alone is not enough for the Claude provider. The Claude provider needs the Claude Code CLI executable, usually `claude.cmd`; the Codex provider needs the `codex` CLI.
+- Codex Desktop may run with a stale PATH. Prefer absolute paths for MCP and `CLAUDE_CODE_PATH`.
+- On Windows, the `claude-mem` Chroma helper may fail if launched through `cmd.exe /c uvx`. Calling `uvx.exe` directly fixed it here.
+- Plugin updates may overwrite local patches in `~\.claude\plugins\cache\...`.
+- This setup can use `CLAUDE_MEM_PROVIDER=codex` to spend the local Codex CLI / ChatGPT plan quota, or `CLAUDE_MEM_PROVIDER=openai` to use OpenAI API billing. The two are separate.
+
+## 1. Install Required Tools
+
+### Node.js
+
+Use Node 22 LTS or newer with npm available.
+
+Verify:
+
+```powershell
+node --version
+npm --version
+```
+
+In this setup, Node was installed under:
+
+```text
+C:\Users\<USER>\.local\nodejs\node-v22.22.2-win-x64
+```
+
+### Bun
+
+Install Bun and verify:
+
+```powershell
+bun --version
+```
+
+Expected path in this setup:
+
+```text
+C:\Users\<USER>\.bun\bin\bun.exe
+```
+
+### uv / uvx
+
+Install uv and verify:
+
+```powershell
+uv --version
+uvx --version
+```
+
+Expected paths in this setup:
+
+```text
+C:\Users\<USER>\.local\bin\uv.exe
+C:\Users\<USER>\.local\bin\uvx.exe
+```
+
+### Visual Studio Build Tools
+
+Native `tree-sitter` packages may require the C++ build tools.
+
+Install with winget:
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity --override "--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+Verify:
+
+```powershell
+& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+```
+
+## 2. Install a Compression Provider
+
+Claude-Mem needs one model provider to convert raw session events into compact memories.
+
+### Option A: Codex CLI Provider
+
+Use this when you want Claude-Mem to use your Codex/ChatGPT plan quota instead of OpenAI API billing.
+
+Verify the Codex CLI:
+
+```powershell
+codex --version
+```
+
+Authenticate if needed:
+
+```powershell
+codex login
+```
+
+Verify that the model works:
+
+```powershell
+codex exec --ephemeral --skip-git-repo-check --ignore-rules --sandbox read-only --model gpt-5.3-codex-spark "Reply with exactly: ok"
+```
+
+Expected final response:
+
+```text
+ok
+```
+
+### Option B: Claude Code CLI Provider
+
+Use this when you want Claude-Mem to use Claude Code auth.
+
+Install:
+
+```powershell
+npm install -g @anthropic-ai/claude-code
+```
+
+Verify:
+
+```powershell
+claude --version
+```
+
+Authenticate:
+
+```powershell
+claude auth login --claudeai
+```
+
+Verify login:
+
+```powershell
+claude auth status
+```
+
+Expected result should include:
+
+```json
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty"
+}
+```
+
+### Option C: OpenAI API Provider
+
+Use this when you want Claude-Mem to use OpenAI API billing with an API key. Configure it in section 4.
+
+## 3. Install claude-mem
+
+Install and repair:
+
+```powershell
+npx -y claude-mem@12.5.0 install --ide codex-cli --provider codex --no-auto-start
+npx -y claude-mem@12.5.0 repair
+```
+
+The plugin cache should exist at:
+
+```text
+C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0
+```
+
+If native dependencies fail, open a Visual Studio developer PowerShell and rebuild in the plugin cache:
+
+```powershell
+cd C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0
+npm rebuild
+```
+
+## 4. Configure claude-mem Settings
+
+Edit:
+
+```text
+C:\Users\<USER>\.claude-mem\settings.json
+```
+
+Important keys:
+
+```json
+{
+  "CLAUDE_MEM_PROVIDER": "codex",
+  "CLAUDE_MEM_CODEX_PATH": "codex",
+  "CLAUDE_MEM_CODEX_MODEL": "gpt-5.3-codex-spark",
+  "CLAUDE_MEM_CODEX_REASONING_EFFORT": "low",
+  "CLAUDE_MEM_CODEX_TIMEOUT_MS": "180000",
+  "CLAUDE_MEM_WORKER_HOST": "127.0.0.1",
+  "CLAUDE_MEM_WORKER_PORT": "37777",
+  "CLAUDE_MEM_TRANSCRIPTS_ENABLED": "true",
+  "CLAUDE_MEM_TRANSCRIPTS_CONFIG_PATH": "C:\\Users\\<USER>\\.claude-mem\\transcript-watch.json",
+  "CLAUDE_MEM_CHROMA_ENABLED": "true",
+  "CLAUDE_MEM_CHROMA_MODE": "local",
+  "CLAUDE_MEM_PYTHON_VERSION": "3.13"
+}
+```
+
+Use any free local port. The examples below use `37777`. If `netstat` shows a listener owned by a PID that `tasklist` says does not exist, Windows is holding a stale kernel TCP entry; choose a new port or reboot Windows to clear it.
+
+If you use the Claude provider instead, set:
+
+```json
+{
+  "CLAUDE_MEM_PROVIDER": "claude",
+  "CLAUDE_MEM_CLAUDE_AUTH_METHOD": "cli",
+  "CLAUDE_CODE_PATH": "C:\\Users\\<USER>\\.local\\nodejs\\node-v22.22.2-win-x64\\claude.cmd"
+}
+```
+
+### Optional OpenAI API Provider
+
+The OpenAI provider uses the OpenAI Responses API and OpenAI API billing. It defaults to `gpt-5.2-codex`, but the model is configurable.
+
+Keep the key out of shared docs. Prefer storing it in:
+
+```text
+C:\Users\<USER>\.claude-mem\.env
+```
+
+Example:
+
+```dotenv
+OPENAI_API_KEY=<your-openai-api-key>
+```
+
+Then set these keys in `settings.json`:
+
+```json
+{
+  "CLAUDE_MEM_PROVIDER": "openai",
+  "CLAUDE_MEM_OPENAI_MODEL": "gpt-5.2-codex",
+  "CLAUDE_MEM_OPENAI_BASE_URL": "https://api.openai.com/v1",
+  "CLAUDE_MEM_OPENAI_MAX_CONTEXT_MESSAGES": "20",
+  "CLAUDE_MEM_OPENAI_MAX_TOKENS": "100000",
+  "CLAUDE_MEM_OPENAI_MAX_OUTPUT_TOKENS": "4096",
+  "CLAUDE_MEM_OPENAI_REASONING_EFFORT": "low"
+}
+```
+
+The model is just a setting. Use a model id that your OpenAI API project can access, for example:
+
+```json
+"CLAUDE_MEM_OPENAI_MODEL": "gpt-5.3-codex"
+```
+
+If you want to use the Codex/ChatGPT plan quota instead of API billing, use `"CLAUDE_MEM_PROVIDER": "codex"` and `CLAUDE_MEM_CODEX_MODEL` instead. Keep `CLAUDE_MEM_CODEX_REASONING_EFFORT` at `low` for the cheapest supported Spark reasoning setting. If no OpenAI key is configured, leave `"CLAUDE_MEM_PROVIDER"` set to `codex` or `claude`.
+
+## 5. Configure Codex Transcript Watching
+
+Create:
+
+```text
+C:\Users\<USER>\.claude-mem\transcript-watch.json
+```
+
+Minimal Codex watcher:
+
+```json
+{
+  "version": 1,
+  "schemas": {
+    "codex": {
+      "name": "codex",
+      "version": "0.3",
+      "description": "Schema for Codex session JSONL files under ~/.codex/sessions.",
+      "events": [
+        {
+          "name": "session-meta",
+          "match": { "path": "type", "equals": "session_meta" },
+          "action": "session_context",
+          "fields": {
+            "sessionId": "payload.id",
+            "cwd": "payload.cwd"
+          }
+        },
+        {
+          "name": "turn-context",
+          "match": { "path": "type", "equals": "turn_context" },
+          "action": "session_context",
+          "fields": {
+            "cwd": "payload.cwd"
+          }
+        },
+        {
+          "name": "user-message",
+          "match": { "path": "payload.type", "equals": "user_message" },
+          "action": "session_init",
+          "fields": {
+            "prompt": "payload.message"
+          }
+        },
+        {
+          "name": "assistant-message",
+          "match": { "path": "payload.type", "equals": "agent_message" },
+          "action": "assistant_message",
+          "fields": {
+            "message": "payload.message"
+          }
+        },
+        {
+          "name": "tool-use",
+          "match": {
+            "path": "payload.type",
+            "in": ["function_call", "custom_tool_call", "web_search_call", "exec_command"]
+          },
+          "action": "tool_use",
+          "fields": {
+            "toolId": "payload.call_id",
+            "toolName": {
+              "coalesce": ["payload.name", "payload.type", { "value": "web_search" }]
+            },
+            "toolInput": {
+              "coalesce": ["payload.arguments", "payload.input", "payload.command", "payload.action"]
+            }
+          }
+        },
+        {
+          "name": "tool-result",
+          "match": {
+            "path": "payload.type",
+            "in": ["function_call_output", "custom_tool_call_output", "exec_command_output"]
+          },
+          "action": "tool_result",
+          "fields": {
+            "toolId": "payload.call_id",
+            "toolResponse": "payload.output"
+          }
+        },
+        {
+          "name": "session-end",
+          "match": {
+            "path": "payload.type",
+            "in": ["turn_aborted", "turn_completed"]
+          },
+          "action": "session_end"
+        }
+      ]
+    }
+  },
+  "watches": [
+    {
+      "name": "codex",
+      "path": "~/.codex/sessions/**/*.jsonl",
+      "schema": "codex",
+      "startAtEnd": true,
+      "context": {
+        "mode": "agents",
+        "updateOn": ["session_start", "session_end"]
+      }
+    }
+  ],
+  "stateFile": "~/.claude-mem/transcript-watch-state.json"
+}
+```
+
+## 6. Register MCP with Codex Desktop
+
+Use absolute paths so Codex does not depend on PATH:
+
+```powershell
+codex mcp remove claude-mem
+codex mcp add claude-mem -- "C:\Users\<USER>\.bun\bin\bun.exe" "C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\mcp-server.cjs"
+codex mcp get claude-mem
+```
+
+Expected:
+
+```text
+claude-mem
+  enabled: true
+  transport: stdio
+  command: C:\Users\<USER>\.bun\bin\bun.exe
+  args: C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\mcp-server.cjs
+```
+
+## 7. Chroma on Windows
+
+Claude-Mem starts `chroma-mcp` through `uvx`. On Windows, direct `uvx.exe` spawning is more reliable than wrapping through `cmd.exe /c uvx` because the wrapper can close MCP stdio immediately.
+
+Use the built-in `CLAUDE_MEM_UVX_PATH` override if `uvx.exe` is not discoverable from the worker process:
+
+```powershell
+[Environment]::SetEnvironmentVariable("CLAUDE_MEM_UVX_PATH", "C:\Users\<USER>\.local\bin\uvx.exe", "User")
+```
+
+Restart Codex or the worker after changing the environment. Older local plugin caches that still wrap `uvx` through `cmd.exe` should be upgraded or repaired instead of editing minified generated bundles by hand.
+
+## 8. Start the Worker
+
+Clear stale runtime files if changing ports or recovering from a stuck worker:
+
+```powershell
+Remove-Item "C:\Users\<USER>\.claude-mem\worker.pid" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\Users\<USER>\.claude-mem\supervisor.json" -Force -ErrorAction SilentlyContinue
+```
+
+Start:
+
+```powershell
+& "C:\Users\<USER>\.bun\bin\bun.exe" "C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\worker-service.cjs" start
+```
+
+Status:
+
+```powershell
+& "C:\Users\<USER>\.bun\bin\bun.exe" "C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\worker-service.cjs" status
+```
+
+## 9. Add Autorun on Windows Login
+
+Task Scheduler may be preferable, but it can require permissions that are not available inside Codex Desktop. The no-admin fallback is a Startup-folder launcher plus a lightweight hidden watchdog.
+
+Create this health-check/start wrapper:
+
+```text
+C:\Users\<USER>\.claude-mem\start-claude-mem-worker.ps1
+```
+
+Purpose:
+
+- Checks the configured worker health URL from `CLAUDE_MEM_WORKER_PORT`.
+- Exits immediately if the worker is already healthy.
+- Starts the worker with absolute Bun and worker paths if health check fails.
+- Writes logs to `C:\Users\<USER>\.claude-mem\autorun.log`.
+
+Contents:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+
+$UserHome = $env:USERPROFILE
+$DataDir = Join-Path $UserHome '.claude-mem'
+$SettingsPath = Join-Path $DataDir 'settings.json'
+$LogPath = Join-Path $DataDir 'autorun.log'
+$BunPath = Join-Path $UserHome '.bun\bin\bun.exe'
+$WorkerPath = Join-Path $UserHome '.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\worker-service.cjs'
+$UvxPath = Join-Path $UserHome '.local\bin\uvx.exe'
+$NodePath = Join-Path $UserHome '.local\nodejs\node-v22.22.2-win-x64'
+$WorkerPort = '37777'
+
+try {
+  if (Test-Path $SettingsPath) {
+    $settings = Get-Content $SettingsPath -Raw | ConvertFrom-Json
+    if ($settings.CLAUDE_MEM_WORKER_PORT) {
+      $WorkerPort = [string]$settings.CLAUDE_MEM_WORKER_PORT
+    }
+  }
+} catch {
+  $WorkerPort = '37777'
+}
+
+$HealthUrl = "http://127.0.0.1:$WorkerPort/api/health"
+
+function Write-Log {
+  param([string]$Message)
+
+  if (-not (Test-Path $DataDir)) {
+    New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
+  }
+
+  $timestamp = (Get-Date).ToString('s')
+  "$timestamp $Message" | Out-File -FilePath $LogPath -Append -Encoding utf8
+}
+
+function Test-ClaudeMemHealth {
+  try {
+    $health = Invoke-RestMethod -Uri $HealthUrl -TimeoutSec 5
+    return ($health.status -eq 'ok' -and $health.initialized -eq $true)
+  } catch {
+    return $false
+  }
+}
+
+try {
+  $env:CLAUDE_MEM_UVX_PATH = $UvxPath
+  $env:Path = @(
+    $NodePath,
+    (Split-Path $BunPath -Parent),
+    (Split-Path $UvxPath -Parent),
+    $env:Path
+  ) -join ';'
+
+  if (-not (Test-Path $BunPath)) {
+    Write-Log "ERROR Bun not found: $BunPath"
+    exit 2
+  }
+
+  if (-not (Test-Path $WorkerPath)) {
+    Write-Log "ERROR claude-mem worker not found: $WorkerPath"
+    exit 2
+  }
+
+  if (Test-ClaudeMemHealth) {
+    Write-Log 'OK claude-mem already healthy'
+    exit 0
+  }
+
+  Write-Log 'START launching claude-mem worker'
+  $output = & $BunPath $WorkerPath start 2>&1
+  $exitCode = $LASTEXITCODE
+  Write-Log "START command exit=$exitCode output=$($output -join ' ')"
+
+  Start-Sleep -Seconds 3
+
+  if (Test-ClaudeMemHealth) {
+    Write-Log 'OK claude-mem healthy after start'
+    exit 0
+  }
+
+  Write-Log 'ERROR claude-mem health check failed after start'
+  exit 1
+} catch {
+  Write-Log "ERROR $($_.Exception.Message)"
+  exit 1
+}
+```
+
+Create this watchdog:
+
+```text
+C:\Users\<USER>\.claude-mem\watch-claude-mem-worker.ps1
+```
+
+Purpose:
+
+- Runs hidden after login.
+- Calls `start-claude-mem-worker.ps1` every 15 minutes.
+- Uses a mutex so only one watchdog runs.
+- Writes logs to `C:\Users\<USER>\.claude-mem\watchdog.log`.
+
+Contents:
+
+```powershell
+$ErrorActionPreference = 'Continue'
+
+$DataDir = Join-Path $env:USERPROFILE '.claude-mem'
+$StartScript = Join-Path $DataDir 'start-claude-mem-worker.ps1'
+$LogPath = Join-Path $DataDir 'watchdog.log'
+$LoopSeconds = 900
+
+function Write-WatchdogLog {
+  param([string]$Message)
+
+  if (-not (Test-Path $DataDir)) {
+    New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
+  }
+
+  $timestamp = (Get-Date).ToString('s')
+  "$timestamp $Message" | Out-File -FilePath $LogPath -Append -Encoding utf8
+}
+
+$createdNew = $false
+$mutex = New-Object System.Threading.Mutex($true, 'Local\ClaudeMemCodexWorkerWatchdog', [ref]$createdNew)
+
+if (-not $createdNew) {
+  Write-WatchdogLog 'Another watchdog is already running; exiting'
+  exit 0
+}
+
+try {
+  Write-WatchdogLog 'Watchdog started'
+
+  while ($true) {
+    try {
+      if (Test-Path $StartScript) {
+        & $StartScript
+        Write-WatchdogLog 'Health check cycle completed'
+      } else {
+        Write-WatchdogLog "Start script missing: $StartScript"
+      }
+    } catch {
+      Write-WatchdogLog "Cycle error: $($_.Exception.Message)"
+    }
+
+    Start-Sleep -Seconds $LoopSeconds
+  }
+} finally {
+  Write-WatchdogLog 'Watchdog stopped'
+  $mutex.ReleaseMutex()
+  $mutex.Dispose()
+}
+```
+
+Create this Startup-folder launcher:
+
+```text
+C:\Users\<USER>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\claude-mem-codex-worker.vbs
+```
+
+Contents:
+
+```vbscript
+Set shell = CreateObject("WScript.Shell")
+script = shell.ExpandEnvironmentStrings("%USERPROFILE%") & "\.claude-mem\watch-claude-mem-worker.ps1"
+command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & script & Chr(34)
+shell.Run command, 0, False
+```
+
+Start the watchdog immediately without waiting for reboot:
+
+```powershell
+wscript.exe "C:\Users\<USER>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\claude-mem-codex-worker.vbs"
+```
+
+Verify the watchdog:
+
+```powershell
+Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -eq 'powershell.exe' -and $_.CommandLine -like '*watch-claude-mem-worker.ps1*' } |
+  Select-Object ProcessId,Name,CommandLine
+
+Get-Content "C:\Users\<USER>\.claude-mem\watchdog.log" -Tail 20
+Get-Content "C:\Users\<USER>\.claude-mem\autorun.log" -Tail 20
+```
+
+Disable autorun:
+
+```powershell
+Remove-Item "C:\Users\<USER>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\claude-mem-codex-worker.vbs" -Force
+
+Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -eq 'powershell.exe' -and $_.CommandLine -like '*watch-claude-mem-worker.ps1*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+## 10. Verify It Works
+
+Open the viewer:
+
+```text
+http://127.0.0.1:37777/
+```
+
+Check worker health:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:37777/api/health | ConvertTo-Json -Depth 8
+```
+
+Expected fields:
+
+```json
+{
+  "status": "ok",
+  "initialized": true,
+  "mcpReady": true,
+  "ai": {
+    "provider": "codex",
+    "authMethod": "Codex CLI / ChatGPT plan"
+  }
+}
+```
+
+Check Chroma semantic search:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:37777/api/chroma/status?deep=1" | ConvertTo-Json -Depth 12
+```
+
+Expected:
+
+```json
+{
+  "status": "healthy",
+  "connected": true,
+  "details": "chroma-mcp semantic search round-trip succeeded",
+  "probe": {
+    "ok": true,
+    "stage": "done"
+  }
+}
+```
+
+Check stats:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:37777/api/stats | ConvertTo-Json -Depth 8
+```
+
+Healthy proof points:
+
+- `database.observations` increases after substantive Codex work.
+- `database.summaries` increases after completed sessions.
+- Viewer shows project names and memory items.
+- Chroma deep probe is healthy.
+- `codex mcp get claude-mem` shows enabled MCP server.
+
+## 11. Troubleshooting
+
+### Claude says not logged in
+
+Run:
+
+```powershell
+claude auth login --claudeai
+claude auth status
+```
+
+### Claude executable not found
+
+Set `CLAUDE_CODE_PATH` in:
+
+```text
+C:\Users\<USER>\.claude-mem\settings.json
+```
+
+Example:
+
+```json
+"CLAUDE_CODE_PATH": "C:\\Users\\<USER>\\.local\\nodejs\\node-v22.22.2-win-x64\\claude.cmd"
+```
+
+### Codex MCP cannot launch
+
+Use absolute paths:
+
+```powershell
+codex mcp remove claude-mem
+codex mcp add claude-mem -- "C:\Users\<USER>\.bun\bin\bun.exe" "C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\mcp-server.cjs"
+```
+
+If the worker port changes, restart Codex Desktop or open a new Codex thread so the MCP stdio bridge is relaunched and reads the new `settings.json`.
+
+### OpenAI provider selected but no memory is saved
+
+Verify that `OPENAI_API_KEY` exists in `C:\Users\<USER>\.claude-mem\.env` or that `CLAUDE_MEM_OPENAI_API_KEY` is set in `settings.json`. Then restart the worker:
+
+```powershell
+& "C:\Users\<USER>\.bun\bin\bun.exe" "C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\worker-service.cjs" restart
+```
+
+If you do not want OpenAI billing, set:
+
+```json
+"CLAUDE_MEM_PROVIDER": "codex"
+```
+
+### Codex provider selected but no memory is saved
+
+Verify the worker can launch the same Codex CLI that you use in a terminal:
+
+```powershell
+codex exec --ephemeral --skip-git-repo-check --ignore-rules --sandbox read-only --model gpt-5.3-codex-spark "Reply with exactly: ok"
+```
+
+If that works in your shell but not from the worker, set an absolute path in `settings.json`:
+
+```json
+{
+  "CLAUDE_MEM_CODEX_PATH": "C:\\Users\\<USER>\\AppData\\Local\\OpenAI\\Codex\\bin\\codex.exe"
+}
+```
+
+### Chroma unhealthy on Windows
+
+Set `CLAUDE_MEM_UVX_PATH` as shown in section 7, then restart the worker.
+
+### Port is stuck
+
+Change `CLAUDE_MEM_WORKER_PORT` in `settings.json`, remove generated runtime files, and restart:
+
+```powershell
+Remove-Item "C:\Users\<USER>\.claude-mem\worker.pid" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\Users\<USER>\.claude-mem\supervisor.json" -Force -ErrorAction SilentlyContinue
+```
+
+On Windows, force-killing the Bun worker while browser tabs or MCP clients still hold keep-alive connections can leave a phantom `LISTENING` socket owned by a PID that no longer appears in `tasklist`. Prefer `claude-mem stop` or the `/api/admin/shutdown` endpoint, close old health/viewer tabs before restarting, and reboot Windows to clear phantom listeners if the TCP table still shows the port as bound.
+
+### Queue stuck from old failed sessions
+
+Stop the worker first, then clear pending rows for sessions already marked completed:
+
+```powershell
+& "C:\Users\<USER>\.bun\bin\bun.exe" "C:\Users\<USER>\.claude\plugins\cache\thedotmack\claude-mem\12.5.0\scripts\worker-service.cjs" stop
+
+@'
+import { Database } from 'bun:sqlite';
+const db = new Database('C:/Users/<USER>/.claude-mem/claude-mem.db');
+const result = db.query("DELETE FROM pending_messages WHERE session_db_id IN (SELECT id FROM sdk_sessions WHERE status = 'completed')").run();
+console.log(JSON.stringify({ deleted: result.changes }, null, 2));
+db.close();
+'@ | bun -
+```
+
+Restart after cleanup.
+
+## Final Known-Good Checks
+
+These were the known-good checks after setup:
+
+```text
+worker: ok
+provider: codex
+auth: Codex CLI / ChatGPT plan
+chroma semantic search: healthy
+mcp: registered in Codex
+viewer: http://127.0.0.1:37777/
+autorun: Startup-folder watchdog enabled
+openai provider: available as a separate API-billed option, inactive until selected
+```

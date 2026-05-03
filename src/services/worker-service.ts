@@ -62,6 +62,8 @@ import { ClaudeProvider } from './worker/ClaudeProvider.js';
 import type { WorkerRef } from './worker/agents/types.js';
 import { GeminiProvider, isGeminiSelected, isGeminiAvailable } from './worker/GeminiProvider.js';
 import { OpenRouterProvider, isOpenRouterSelected, isOpenRouterAvailable } from './worker/OpenRouterProvider.js';
+import { OpenAIProvider, isOpenAISelected, isOpenAIAvailable } from './worker/OpenAIProvider.js';
+import { CodexProvider, isCodexSelected, isCodexAvailable } from './worker/CodexProvider.js';
 import { PaginationHelper } from './worker/PaginationHelper.js';
 import { SettingsManager } from './worker/SettingsManager.js';
 import { SearchManager } from './worker/SearchManager.js';
@@ -118,6 +120,8 @@ export class WorkerService implements WorkerRef {
   private sdkAgent: ClaudeProvider;
   private geminiAgent: GeminiProvider;
   private openRouterAgent: OpenRouterProvider;
+  private openAiAgent: OpenAIProvider;
+  private codexAgent: CodexProvider;
   private paginationHelper: PaginationHelper;
   private settingsManager: SettingsManager;
   private sessionEventBroadcaster: SessionEventBroadcaster;
@@ -151,6 +155,8 @@ export class WorkerService implements WorkerRef {
     this.sdkAgent = new ClaudeProvider(this.dbManager, this.sessionManager);
     this.geminiAgent = new GeminiProvider(this.dbManager, this.sessionManager);
     this.openRouterAgent = new OpenRouterProvider(this.dbManager, this.sessionManager);
+    this.openAiAgent = new OpenAIProvider(this.dbManager, this.sessionManager);
+    this.codexAgent = new CodexProvider(this.dbManager, this.sessionManager);
 
     this.paginationHelper = new PaginationHelper(this.dbManager);
     this.settingsManager = new SettingsManager(this.dbManager);
@@ -183,11 +189,19 @@ export class WorkerService implements WorkerRef {
       workerPath: __filename,
       getAiStatus: () => {
         let provider = 'claude';
-        if (isOpenRouterSelected() && isOpenRouterAvailable()) provider = 'openrouter';
+        if (isCodexSelected() && isCodexAvailable()) provider = 'codex';
+        else if (isOpenAISelected() && isOpenAIAvailable()) provider = 'openai';
+        else if (isOpenRouterSelected() && isOpenRouterAvailable()) provider = 'openrouter';
         else if (isGeminiSelected() && isGeminiAvailable()) provider = 'gemini';
+        const authMethod =
+          provider === 'codex' ? 'Codex CLI / ChatGPT plan' :
+          provider === 'openai' ? 'OpenAI API key' :
+          provider === 'openrouter' ? 'OpenRouter API key' :
+          provider === 'gemini' ? 'Gemini API key' :
+          getAuthMethodDescription();
         return {
           provider,
-          authMethod: getAuthMethodDescription(),
+          authMethod,
           lastInteraction: this.lastAiInteraction
             ? {
                 timestamp: this.lastAiInteraction.timestamp,
@@ -259,7 +273,7 @@ export class WorkerService implements WorkerRef {
     });
 
     this.server.registerRoutes(new ViewerRoutes(this.sseBroadcaster, this.dbManager, this.sessionManager));
-    const sessionRoutes = new SessionRoutes(this.sessionManager, this.dbManager, this.sdkAgent, this.geminiAgent, this.openRouterAgent, this.sessionEventBroadcaster, this, this.completionHandler);
+    const sessionRoutes = new SessionRoutes(this.sessionManager, this.dbManager, this.sdkAgent, this.geminiAgent, this.openRouterAgent, this.openAiAgent, this.codexAgent, this.sessionEventBroadcaster, this, this.completionHandler);
     this.server.registerRoutes(sessionRoutes);
     attachIngestGeneratorStarter((sessionDbId, source) =>
       sessionRoutes.ensureGeneratorRunning(sessionDbId, source),
@@ -493,7 +507,19 @@ export class WorkerService implements WorkerRef {
     });
   }
 
-  private getActiveAgent(): ClaudeProvider | GeminiProvider | OpenRouterProvider {
+  private getActiveAgent(): ClaudeProvider | GeminiProvider | OpenRouterProvider | OpenAIProvider | CodexProvider {
+    if (isCodexSelected()) {
+      if (isCodexAvailable()) {
+        return this.codexAgent;
+      }
+      throw new Error('Codex provider selected but Codex CLI was not found. Set CLAUDE_MEM_CODEX_PATH or install/login to the Codex CLI.');
+    }
+    if (isOpenAISelected()) {
+      if (isOpenAIAvailable()) {
+        return this.openAiAgent;
+      }
+      throw new Error('OpenAI provider selected but no API key configured. Set CLAUDE_MEM_OPENAI_API_KEY in settings or OPENAI_API_KEY in ~/.claude-mem/.env.');
+    }
     if (isOpenRouterSelected() && isOpenRouterAvailable()) {
       return this.openRouterAgent;
     }
@@ -544,6 +570,13 @@ export class WorkerService implements WorkerRef {
           'Gemini API error: 400',
           'Gemini API error: 401',
           'Gemini API error: 403',
+          'OpenAI API error: 400',
+          'OpenAI API error: 401',
+          'OpenAI API error: 403',
+          'OpenAI provider selected but no API key configured',
+          'Codex CLI exited',
+          'Codex CLI timed out',
+          'Codex provider selected but Codex CLI was not found',
           'FOREIGN KEY constraint failed',
         ];
         if (unrecoverablePatterns.some(pattern => errorMessage.includes(pattern))) {
@@ -678,6 +711,19 @@ export class WorkerService implements WorkerRef {
           logger.error('WORKER', 'Fallback OpenRouter failed, will abandon messages', { sessionId: sessionDbId }, e);
         } else {
           logger.error('WORKER', 'Fallback OpenRouter failed with non-Error, will abandon messages', { sessionId: sessionDbId }, new Error(String(e)));
+        }
+      }
+    }
+
+    if (isOpenAIAvailable()) {
+      try {
+        await this.openAiAgent.startSession(session, this);
+        return;
+      } catch (e) {
+        if (e instanceof Error) {
+          logger.error('WORKER', 'Fallback OpenAI failed, will abandon messages', { sessionId: sessionDbId }, e);
+        } else {
+          logger.error('WORKER', 'Fallback OpenAI failed with non-Error, will abandon messages', { sessionId: sessionDbId }, new Error(String(e)));
         }
       }
     }

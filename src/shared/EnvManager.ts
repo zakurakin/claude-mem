@@ -17,6 +17,7 @@ export interface ClaudeMemEnv {
   ANTHROPIC_BASE_URL?: string;
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  OPENAI_API_KEY?: string;
 }
 
 function parseEnvFile(content: string): Record<string, string> {
@@ -78,6 +79,7 @@ export function loadClaudeMemEnv(): ClaudeMemEnv {
     if (parsed.ANTHROPIC_BASE_URL) result.ANTHROPIC_BASE_URL = parsed.ANTHROPIC_BASE_URL;
     if (parsed.GEMINI_API_KEY) result.GEMINI_API_KEY = parsed.GEMINI_API_KEY;
     if (parsed.OPENROUTER_API_KEY) result.OPENROUTER_API_KEY = parsed.OPENROUTER_API_KEY;
+    if (parsed.OPENAI_API_KEY) result.OPENAI_API_KEY = parsed.OPENAI_API_KEY;
 
     return result;
   } catch (error: unknown) {
@@ -133,6 +135,13 @@ export function saveClaudeMemEnv(env: ClaudeMemEnv): void {
       delete updated.OPENROUTER_API_KEY;
     }
   }
+  if (env.OPENAI_API_KEY !== undefined) {
+    if (env.OPENAI_API_KEY) {
+      updated.OPENAI_API_KEY = env.OPENAI_API_KEY;
+    } else {
+      delete updated.OPENAI_API_KEY;
+    }
+  }
 
   try {
     writeFileSync(ENV_FILE_PATH, serializeEnvFile(updated), { encoding: 'utf-8', mode: 0o600 });
@@ -169,6 +178,9 @@ export function buildIsolatedEnv(includeCredentials: boolean = true): Record<str
     }
     if (credentials.OPENROUTER_API_KEY) {
       isolatedEnv.OPENROUTER_API_KEY = credentials.OPENROUTER_API_KEY;
+    }
+    if (credentials.OPENAI_API_KEY) {
+      isolatedEnv.OPENAI_API_KEY = credentials.OPENAI_API_KEY;
     }
 
     if (!isolatedEnv.ANTHROPIC_API_KEY && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
