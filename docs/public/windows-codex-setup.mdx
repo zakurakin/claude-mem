@@ -228,6 +228,18 @@ Important keys:
 
 Use any free local port. The examples below use `37777`. If `netstat` shows a listener owned by a PID that `tasklist` says does not exist, Windows is holding a stale kernel TCP entry; choose a new port or reboot Windows to clear it.
 
+With the Codex provider, `CLAUDE_MEM_CODEX_PATH=codex` auto-probes the Codex Desktop install path under `%LOCALAPPDATA%\OpenAI\Codex\bin`. Use an absolute `codex.exe` path only if your worker logs still show `uv_spawn 'codex'` or your install is in a custom location.
+
+Keeping the worker running does not spend Codex quota by itself. Quota is spent when `CLAUDE_MEM_TRANSCRIPTS_ENABLED=true` and the transcript watcher observes new Codex Desktop messages that need compression. To pause automatic capture while keeping search/MCP available, set:
+
+```json
+{
+  "CLAUDE_MEM_TRANSCRIPTS_ENABLED": "false"
+}
+```
+
+Restart the worker after changing transcript settings.
+
 If you use the Claude provider instead, set:
 
 ```json
@@ -774,7 +786,7 @@ Verify the worker can launch the same Codex CLI that you use in a terminal:
 codex exec --ephemeral --skip-git-repo-check --ignore-rules --sandbox read-only --model gpt-5.3-codex-spark "Reply with exactly: ok"
 ```
 
-If that works in your shell but not from the worker, set an absolute path in `settings.json`:
+By default, Claude-Mem probes the Codex Desktop install path under `%LOCALAPPDATA%\OpenAI\Codex\bin` when `CLAUDE_MEM_CODEX_PATH` is `codex`. If your install is somewhere else, set an absolute path in `settings.json`:
 
 ```json
 {

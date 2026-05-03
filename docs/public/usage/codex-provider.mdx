@@ -47,7 +47,7 @@ Edit `~/.claude-mem/settings.json`:
 }
 ```
 
-On Windows, `CLAUDE_MEM_CODEX_PATH` can be an absolute path to `codex.exe` or `codex.cmd` if the worker cannot find `codex` from PATH.
+On Windows, the default `codex` command also probes the Codex Desktop install location under `%LOCALAPPDATA%\OpenAI\Codex\bin`. You can still set `CLAUDE_MEM_CODEX_PATH` to an absolute `codex.exe` or `codex.cmd` path if your install lives somewhere else.
 
 ## Restart and Verify
 
@@ -83,6 +83,20 @@ codex exec --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check
 Claude-Mem passes the compression conversation over stdin and reads Codex's final message from a temporary output file. The provider does not store an API key and does not call the OpenAI Responses API.
 
 `gpt-5.3-codex-spark` supports `low`, `medium`, `high`, and `xhigh` reasoning effort. `low` is the default for Claude-Mem because memory compression should be cheap and frequent.
+
+## Background Usage and Quota
+
+Keeping the Claude-Mem worker running does not spend Codex quota by itself. Quota is spent when a compression turn runs, which normally happens after the transcript watcher observes new Codex Desktop session messages.
+
+For passive Codex Desktop memory capture, a worker or watcher process must stay alive because Codex writes local JSONL transcript files and does not currently call Claude-Mem on demand. If you want Claude-Mem search/MCP available without automatic Codex compression, disable transcript watching:
+
+```json
+{
+  "CLAUDE_MEM_TRANSCRIPTS_ENABLED": "false"
+}
+```
+
+Restart the worker after changing the setting. With transcript watching disabled, new Codex Desktop conversations are not captured automatically, but existing memories remain searchable.
 
 ## Troubleshooting
 

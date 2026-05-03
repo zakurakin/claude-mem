@@ -309,12 +309,15 @@ Then set these keys in `%USERPROFILE%\.claude-mem\settings.json` if the installe
 ```json
 {
   "CLAUDE_MEM_PROVIDER": "codex",
+  "CLAUDE_MEM_CODEX_PATH": "codex",
   "CLAUDE_MEM_CODEX_MODEL": "gpt-5.3-codex-spark",
   "CLAUDE_MEM_CODEX_REASONING_EFFORT": "low"
 }
 ```
 
-The separate `openai` provider uses an OpenAI API key and API billing. The `codex` provider shells out to the local `codex` CLI and uses your logged-in Codex account.
+The separate `openai` provider uses an OpenAI API key and API billing. The `codex` provider shells out to the local `codex` CLI and uses your logged-in Codex account. On Windows, the default `codex` command also probes the Codex Desktop install path under `%LOCALAPPDATA%\OpenAI\Codex\bin`.
+
+Keeping the worker running does not spend Codex quota by itself. Quota is spent when transcript watching observes new session messages and starts a compression turn. To keep search/MCP available but pause automatic Codex compression, set `"CLAUDE_MEM_TRANSCRIPTS_ENABLED": "false"` and restart the worker.
 
 If you see an error like:
 
