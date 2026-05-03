@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -25,6 +25,7 @@ const DEFAULT_MAX_ESTIMATED_TOKENS = 100000;
 const DEFAULT_TIMEOUT_MS = 180000;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
 const MAX_PROCESS_OUTPUT_CAPTURE = 20000;
+const WINDOWS_CODEX_COMMAND_NAMES = new Set(['codex', 'codex.exe', 'codex.cmd']);
 
 type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
@@ -52,6 +53,51 @@ interface CodexJsonEvent {
     output_tokens?: number;
     total_tokens?: number;
   };
+}
+
+function getWindowsCodexInstallCandidates(): string[] {
+  const localAppDataCandidates = [
+    process.env.LOCALAPPDATA,
+    process.env.USERPROFILE ? join(process.env.USERPROFILE, 'AppData', 'Local') : undefined
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  const uniqueLocalAppData = [...new Set(localAppDataCandidates.map((candidate) => path.normalize(candidate)))];
+
+  return uniqueLocalAppData.flatMap((localAppData) => [
+    join(localAppData, 'OpenAI', 'Codex', 'bin', 'codex.exe'),
+    join(localAppData, 'OpenAI', 'Codex', 'bin', 'codex.cmd')
+  ]);
+}
+
+function isBareCodexCommand(commandPath: string): boolean {
+  const trimmed = commandPath.trim();
+  const hasPathSeparator = trimmed.includes('\\') || trimmed.includes('/');
+  return !hasPathSeparator
+    && !path.isAbsolute(trimmed)
+    && WINDOWS_CODEX_COMMAND_NAMES.has(trimmed.toLowerCase());
+}
+
+function resolveCodexCommand(commandPath: string): string {
+  const trimmed = commandPath.trim() || DEFAULT_CODEX_PATH;
+
+  if (process.platform !== 'win32' || !isBareCodexCommand(trimmed)) {
+    return trimmed;
+  }
+
+  return getWindowsCodexInstallCandidates().find((candidate) => existsSync(candidate)) || trimmed;
+}
+
+function commandExistsOnPath(commandPath: string): boolean {
+  const checker = process.platform === 'win32' ? 'where.exe' : 'which';
+  try {
+    const result = spawnSync(checker, [commandPath], {
+      stdio: 'ignore',
+      windowsHide: true
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 export class CodexProvider {
@@ -572,7 +618,7 @@ export class CodexProvider {
   }
 
   private normalizeCodexCommand(commandPath: string): string {
-    return commandPath.trim() || DEFAULT_CODEX_PATH;
+    return resolveCodexCommand(commandPath);
   }
 
   private getCodexConfig(): CodexConfig {
@@ -600,11 +646,11 @@ export class CodexProvider {
 
 export function isCodexAvailable(): boolean {
   const settings = SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH);
-  const commandPath = settings.CLAUDE_MEM_CODEX_PATH || DEFAULT_CODEX_PATH;
+  const commandPath = resolveCodexCommand(settings.CLAUDE_MEM_CODEX_PATH || DEFAULT_CODEX_PATH);
   const hasPathSeparator = commandPath.includes('\\') || commandPath.includes('/');
 
   if (!hasPathSeparator && !path.isAbsolute(commandPath)) {
-    return true;
+    return commandExistsOnPath(commandPath);
   }
 
   if (existsSync(commandPath)) {

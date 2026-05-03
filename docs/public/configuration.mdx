@@ -62,7 +62,7 @@ See [OpenAI Provider](usage/openai-provider) for setup instructions.
 
 | Setting                                      | Default                     | Description                           |
 |----------------------------------------------|-----------------------------|---------------------------------------|
-| `CLAUDE_MEM_CODEX_PATH`                      | `codex`                     | Codex CLI command or absolute executable path |
+| `CLAUDE_MEM_CODEX_PATH`                      | `codex`                     | Codex CLI command or absolute executable path. On Windows, the default also probes the Codex Desktop install path |
 | `CLAUDE_MEM_CODEX_MODEL`                     | `gpt-5.3-codex-spark`       | Model passed to `codex exec` |
 | `CLAUDE_MEM_CODEX_REASONING_EFFORT`          | `low`                       | Reasoning effort passed through `model_reasoning_effort`: `low`, `medium`, `high`, or `xhigh` |
 | `CLAUDE_MEM_CODEX_MAX_CONTEXT_MESSAGES`      | `20`                        | Max messages in conversation history  |
@@ -79,6 +79,8 @@ See [Codex CLI Provider](usage/codex-provider) for setup instructions. This prov
 | `CLAUDE_MEM_LOG_LEVEL`        | `INFO`                          | Log verbosity (DEBUG, INFO, WARN, ERROR, SILENT) |
 | `CLAUDE_MEM_PYTHON_VERSION`   | `3.13`                          | Python version for chroma-mcp         |
 | `CLAUDE_CODE_PATH`            | _(auto-detect)_                 | Path to Claude Code CLI (for Windows) |
+| `CLAUDE_MEM_TRANSCRIPTS_ENABLED` | `true`                       | Enable passive transcript watching. Set to `false` to keep search/MCP running without automatic compression |
+| `CLAUDE_MEM_TRANSCRIPTS_CONFIG_PATH` | `~/.claude-mem/transcript-watch.json` | Transcript watcher config path |
 
 ## Model Configuration
 
